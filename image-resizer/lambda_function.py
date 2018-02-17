@@ -7,8 +7,8 @@ from os import path
 s3 = boto3.resource('s3')
 origin_bucket = 'static-printweb-com-au'
 destination_bucket = 'static-resized-printweb-com-au'
-desination_folder = 'uploads/'
-resample_size = 128, 128
+# desination_folder = 'uploads/'
+resample_size = 64, 64
 
 def lambda_handler(event, context):
     
@@ -16,10 +16,8 @@ def lambda_handler(event, context):
         object_key = key['s3']['object']['key']
         basename_with_ext = path.basename(object_key)
         basename = path.splitext(basename_with_ext)[0]
-        full_folder_path = path.dirname(object_key)
-        folder_basename = path.basename(full_folder_path)
+        folder_basename = path.basename(path.dirname(object_key))
         thumb_folder_path = path.join(folder_basename, 'thumb')
-        
         # Grabs the source file
         obj = s3.Object(
             bucket_name=origin_bucket,
@@ -29,7 +27,10 @@ def lambda_handler(event, context):
         resized_image = _resize_image(obj_body)
 
         # Uploading the image
-        dest_object_key = _create_resampled_filename(thumb_folder_path, basename, 'png')
+        # dest_object_key = _create_resampled_filename(thumb_folder_path, basename, 'png')
+        new_file_name = '{0}.{1}'.format(basename, 'png')
+        dest_object_key = path.join(thumb_folder_path, new_file_name)
+
         obj = s3.Object(
             bucket_name=destination_bucket,
             key=dest_object_key,
@@ -55,6 +56,4 @@ def _create_resampled_filename(folder, file_name, ext):
     s = '{0}x{1}'.format(resample_size[0], resample_size[1])
     new_file_name = '{0}_{1}.{2}'.format(file_name, s, ext)
 
-    #create parent folder
-    parent_path = path.join(folder, file_name)
-    return path.join(parent_path, new_file_name)
+    return path.join(folder, new_file_name)
