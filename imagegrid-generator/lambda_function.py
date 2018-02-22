@@ -14,14 +14,12 @@ region = 's3-ap-southeast-2.amazonaws.com'
 tile_size = 64
 cols = 3
 col_spacing = 4
-downloaded_images = []
-start = time.time()
 
 def lambda_handler(event, context): 
     if(event.get('type') == 'thumb'):
         return generate_thumb_grid(event)
 
-def get_file_from_s3(key, folder_path):
+def get_file_from_s3(key, folder_path, downloaded_images):
     object_key = path.join(folder_path,key)
 
     # Grabs the source file
@@ -37,15 +35,21 @@ def get_file_from_s3(key, folder_path):
         return False
 
 def generate_thumb_grid(event):
+    downloaded_images = []
     size = (tile_size+col_spacing)*cols - col_spacing
     canvas = Image.new('RGB', (size, size),color=(255,255,255))
     folder_path = path.join(event.get('uuid'), 'thumb')
     
     # thread load the files in async. Warning S3 boto is not thread safe
+    # for key in event.get('files'):
+    #     print(key, folder_path)
+    #     t = threading.Thread(target = get_file_from_s3, args=(key, folder_path,))
+    #     t.start()
+    #     t.join()
     for key in event.get('files'):
-        t = threading.Thread(target = get_file_from_s3, args=(key, folder_path,))
-        t.start()
-        t.join()
+        print(key, folder_path)
+        get_file_from_s3(key, folder_path, downloaded_images)
+
 
     for (i, obj_body) in enumerate(downloaded_images):
         if(obj_body):
@@ -54,7 +58,7 @@ def generate_thumb_grid(event):
             y_pos = int(i / (cols)) * (tile_size+col_spacing)
             
             img = Image.open(BytesIO(obj_body))
-            print(img, i)
+            # print(img, i)
             # img = Image.open(path.join('thumb', key))
             canvas.paste(img, (x_pos, y_pos))
 
@@ -75,17 +79,23 @@ def generate_thumb_grid(event):
         dest_object_key,
     ))
 
+    # clear from memory
+    in_mem_file = None
+    canvas = None
+    obj = None
+    downloaded_images = None
+
     p = 'https://'+destination_bucket+'.'+region
     return {'data': path.join(p, dest_object_key)}
 
 
 # Resizing the image
-def _resize_image(obj_body):
-    img = Image.open(BytesIO(obj_body))
-    thumb = ImageOps.fit(img, resample_size, Image.ANTIALIAS, 0.0, (0.5, 0.5))
+# def _resize_image(obj_body):
+#     img = Image.open(BytesIO(obj_body))
+#     thumb = ImageOps.fit(img, resample_size, Image.ANTIALIAS, 0.0, (0.5, 0.5))
 
-    in_mem_file = BytesIO()
-    thumb.save(in_mem_file, 'PNG')
-    return in_mem_file.getvalue()
+#     in_mem_file = BytesIO()
+#     thumb.save(in_mem_file, 'PNG')
+#     return in_mem_file.getvalue()
 
 
