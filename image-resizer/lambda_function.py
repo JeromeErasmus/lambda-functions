@@ -18,10 +18,15 @@ def lambda_handler(event, context):
     object_key = event.get('file')['object_key']#key['s3']['object']['key']
     origin_bucket = event.get('file')['bucket_name']
 
-    if event.get('size'): 
+    if event.get('size'):
         resample_size = event.get('size'), event.get('size')
     else:
         resample_size = 128,128
+    
+    if event.get('dest_path'):
+        dest_path = event.get('dest_path')
+    else:
+        dest_path = 'thumb'
 
     print(object_key)
     print(origin_bucket)
@@ -30,7 +35,7 @@ def lambda_handler(event, context):
     basename_with_ext = path.basename(object_key)
     basename = path.splitext(basename_with_ext)[0]
     folder_basename = path.basename(path.dirname(object_key))
-    thumb_folder_path = path.join(folder_basename, 'thumb')
+    dest_folder_path = path.join(folder_basename, dest_path)
 
     # Grabs the source file
     obj = s3.Object(
@@ -44,7 +49,7 @@ def lambda_handler(event, context):
 
     # Uploading the image
     new_file_name = '{0}.{1}'.format(basename, 'png')
-    dest_object_key = path.join(thumb_folder_path, new_file_name)
+    dest_object_key = path.join(dest_folder_path, new_file_name)
 
     obj = s3.Object(bucket_name=destination_bucket, key=dest_object_key,)
     obj.put(Body=resized_image)
