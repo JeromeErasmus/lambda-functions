@@ -6,15 +6,18 @@ import botocore.config
 import PIL
 from PIL import Image, ImageOps, ImageDraw
 from io import BytesIO
+from io import StringIO
 from os import path
 import threading
 import time
+from urllib.request import urlopen
+
 
 s3 = boto3.resource('s3')
 origin_bucket = 'static-resized-printweb-com-au'
 destination_bucket = 'static-resized-printweb-com-au'
 region = 's3-ap-southeast-2.amazonaws.com'
-tile_size = 128
+tile_size = 185
 cols = 3
 col_spacing = 4
 
@@ -22,18 +25,28 @@ def lambda_handler(event, context):
     if(event.get('type') == 'thumb'):
         return generate_thumb_grid(event)
 
-def get_file_from_s3(key, folder_path, downloaded_images):
-    object_key = path.join(folder_path,key)
-    print('src bucket : ', origin_bucket)
-    print('src key : ', object_key)
-    # Grabs the source file
-    obj = s3.Object(
-        bucket_name=origin_bucket,
-        key=object_key,
-    )
-    obj_body = obj.get()['Body'].read()
-    if(obj_body):
-        downloaded_images.append(obj_body)
+# def get_file_from_s3(key, folder_path, downloaded_images):
+#     object_key = path.join(folder_path,key)
+#     print('src bucket : ', origin_bucket)
+#     print('src key : ', object_key)
+#     # Grabs the source file
+#     obj = s3.Object(
+#         bucket_name=origin_bucket,
+#         key=object_key,
+#     )
+#     obj_body = obj.get()['Body'].read()
+#     if(obj_body):
+#         downloaded_images.append(obj_body)
+#         return True
+#     else:
+#         return False
+
+def getFileFromUrl(url, downloaded_images):
+    img_file = urlopen(url)
+    im = BytesIO(img_file.read())
+
+    if(im):
+        downloaded_images.append(Image.open(im))
         return True
     else:
         return False
@@ -54,8 +67,9 @@ def generate_thumb_grid(event):
         key=dest_object_key,
     )
 
-    for key in event.get('files'):
-        get_file_from_s3(key, folder_path, downloaded_images)
+    for url in event.get('files'):
+        print(url)
+        getFileFromUrl(url, downloaded_images)
 
     # CREATE CLASSIC
     if(product_type == 'classic'):
@@ -64,8 +78,8 @@ def generate_thumb_grid(event):
                 # paste data onto canvas
                 x_pos = int((i % cols) * (tile_size+col_spacing))
                 y_pos = int(i / (cols)) * (tile_size+col_spacing)
-                img = Image.open(BytesIO(obj_body))
-                canvas.paste(img, (x_pos, y_pos))
+                # img = Image.open(BytesIO(obj_body))
+                canvas.paste(obj_body, (x_pos, y_pos))
         print ("Classic tiles")
         # save file
         in_mem_file = BytesIO()
@@ -75,18 +89,19 @@ def generate_thumb_grid(event):
     # CREATE mosaic
     elif product_type == 'mosaque':
         obj_body = downloaded_images[0]
-        canvas = Image.open(BytesIO(obj_body))
+        # canvas = Image.open(BytesIO(obj_body))
+        canvas = obj_body
         print(size)
         print ("Mosaque tiles")
         canvas.thumbnail((size, size))
 
         # -----------------------
         # draw lines
-        draw = ImageDraw.Draw(canvas)
+        draw = ImageDraw.Draw(obj_body)
 
          # do vertical lines
         for i in range(1, cols):
-            x0 = int(i * (tile_size+col_spacing))
+            x0 = int(i * (tile_size))
             y0 = 0
 
             x1 = x0 + col_spacing
@@ -98,7 +113,7 @@ def generate_thumb_grid(event):
         # do horizontal lines
         for i in range(1, cols):
             x0 = 0
-            y0 = int(i * (tile_size+col_spacing))
+            y0 = int(i * (tile_size))
 
             x1 = size
             y1 = y0 + col_spacing
